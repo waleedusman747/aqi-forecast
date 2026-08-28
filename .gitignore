@@ -1,0 +1,6 @@
+venv/
+.env
+__pycache__/
+aqi_repo/feature_repo/__pycache__/
+aqi_repo/feature_repo/data/registry.db
+aqi_repo/feature_repo/data/online_store.db
