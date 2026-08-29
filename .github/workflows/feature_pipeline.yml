@@ -23,7 +23,7 @@ jobs:
 
       - name: Run feature pipeline
         env:
-          AQICN_TOKEN: ${{ secrets.AQICN_TOKEN }}
+          IQAIR_API_KEY: ${{ secrets.IQAIR_API_KEY }}
         run: |
           python feature_pipeline.py
 
