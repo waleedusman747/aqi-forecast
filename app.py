@@ -87,29 +87,21 @@ def toggle_theme():
 
 is_dark = st.session_state.theme == "dark"
 
-# Theme palette
 if is_dark:
     bg_color = "#0e1117"
-    card_bg = "#1c2029"
     text_color = "#f0f2f6"
     subtext_color = "#a0a5b1"
     accent = "#4fc3f7"
-    border_color = "#2d3340"
 else:
     bg_color = "#f7f9fc"
-    card_bg = "#ffffff"
     text_color = "#1a1f2b"
     subtext_color = "#5c6270"
     accent = "#0277bd"
-    border_color = "#e0e4ea"
 
 st.markdown(f"""
 <style>
-.stApp {{
-    background-color: {bg_color};
-    color: {text_color};
-}}
-[data-testid="stMetricValue"] {{ font-size: 2.2rem; color: {text_color}; }}
+.stApp {{ background-color: {bg_color}; }}
+[data-testid="stMetricValue"] {{ color: {text_color}; }}
 [data-testid="stMetricLabel"] {{ color: {subtext_color}; }}
 .category-badge {{
     display: inline-block;
@@ -119,19 +111,13 @@ st.markdown(f"""
     color: black;
     font-size: 0.9rem;
 }}
-.custom-card {{
-    background-color: {card_bg};
-    border: 1px solid {border_color};
-    border-radius: 12px;
-    padding: 20px;
-    margin-bottom: 16px;
+h1, h2, h3, h4, p, span, label,
+[data-testid="stSidebar"] * ,
+[data-testid="stMarkdownContainer"] * {{
+    color: {text_color} !important;
 }}
-.accent-text {{ color: {accent}; }}
-h1, h2, h3 {{ color: {text_color} !important; }}
-p, span, div {{ color: {text_color}; }}
-[data-testid="stSidebar"] {{
-    background-color: {card_bg};
-    border-right: 1px solid {border_color};
+[data-testid="stCaptionContainer"] * {{
+    color: {subtext_color} !important;
 }}
 </style>
 """, unsafe_allow_html=True)
@@ -140,7 +126,7 @@ p, span, div {{ color: {text_color}; }}
 with st.sidebar:
     col_a, col_b = st.columns([3, 1])
     with col_a:
-        st.markdown(f"### 🌫️ AQI Forecast")
+        st.markdown("### 🌫️ AQI Forecast")
     with col_b:
         icon = "🌙" if is_dark else "☀️"
         st.button(icon, on_click=toggle_theme, help="Toggle dark/light mode")
@@ -192,23 +178,21 @@ st.caption(f"Last updated: {current_time.strftime('%d %B %Y, %I:%M %p')}")
 # ================= CURRENT AQI =================
 col1, col2 = st.columns([1, 2])
 with col1:
-    st.markdown('<div class="custom-card">', unsafe_allow_html=True)
-    st.metric("Current AQI", f"{current_aqi:.0f}")
-    st.markdown(
-        f'<span class="category-badge" style="background:{color};">{cat}</span>',
-        unsafe_allow_html=True,
-    )
-    st.markdown('</div>', unsafe_allow_html=True)
+    with st.container(border=True):
+        st.metric("Current AQI", f"{current_aqi:.0f}")
+        st.markdown(
+            f'<span class="category-badge" style="background:{color};">{cat}</span>',
+            unsafe_allow_html=True,
+        )
 with col2:
-    st.markdown('<div class="custom-card">', unsafe_allow_html=True)
-    st.markdown("#### Dominant readings right now")
-    latest = latest_row.iloc[0]
-    m1, m2, m3, m4 = st.columns(4)
-    m1.metric("🌡️ Temp", f"{latest['temperature']:.0f}°C")
-    m2.metric("💧 Humidity", f"{latest['humidity']:.0f}%")
-    m3.metric("🌬️ Wind", f"{latest['wind']:.0f} km/h")
-    m4.metric("📊 Pressure", f"{latest['pressure']:.0f} hPa")
-    st.markdown('</div>', unsafe_allow_html=True)
+    with st.container(border=True):
+        st.markdown("#### Dominant readings right now")
+        latest = latest_row.iloc[0]
+        m1, m2, m3, m4 = st.columns(4)
+        m1.metric("🌡️ Temp", f"{latest['temperature']:.0f}°C")
+        m2.metric("💧 Humidity", f"{latest['humidity']:.0f}%")
+        m3.metric("🌬️ Wind", f"{latest['wind']:.0f} km/h")
+        m4.metric("📊 Pressure", f"{latest['pressure']:.0f} hPa")
 
 # ================= ALERT =================
 max_forecast = max(predictions.values())
@@ -226,14 +210,13 @@ for i, horizon in enumerate([24, 48, 72]):
     pred_aqi = predictions[horizon]
     pred_cat, pred_color = aqi_category(pred_aqi)
     with cols[i]:
-        st.markdown('<div class="custom-card">', unsafe_allow_html=True)
-        st.markdown(f"**+{horizon} hours**")
-        st.metric(label="", value=f"{pred_aqi:.0f}", delta=f"{pred_aqi - current_aqi:+.0f} vs now")
-        st.markdown(
-            f'<span class="category-badge" style="background:{pred_color};">{pred_cat}</span>',
-            unsafe_allow_html=True,
-        )
-        st.markdown('</div>', unsafe_allow_html=True)
+        with st.container(border=True):
+            st.markdown(f"**+{horizon} hours**")
+            st.metric(label="", value=f"{pred_aqi:.0f}", delta=f"{pred_aqi - current_aqi:+.0f} vs now")
+            st.markdown(
+                f'<span class="category-badge" style="background:{pred_color};">{pred_cat}</span>',
+                unsafe_allow_html=True,
+            )
 
 # ================= CHART =================
 st.subheader("📈 AQI Trend: History & Forecast")
@@ -248,7 +231,7 @@ forecast_df = pd.DataFrame(forecast_rows)
 
 chart_df = pd.concat([recent, forecast_df], ignore_index=True)
 chart_pivot = chart_df.pivot_table(index="timestamp", columns="type", values="aqi")
-st.line_chart(chart_pivot, color=[accent, "#ff7e00"])
+st.line_chart(chart_pivot)
 
 # ================= RAW DATA =================
 with st.expander("🔍 View recent raw data"):
