@@ -23,15 +23,15 @@ FEATURE_COLS = BASE_FEATURE_COLS + LAG_FEATURE_COLS
 
 def aqi_category(aqi):
     if aqi <= 50:
-        return "Good", "#00e400"
+        return "Good", "#22c55e"
     elif aqi <= 100:
-        return "Moderate", "#dbc400"
+        return "Moderate", "#eab308"
     elif aqi <= 150:
-        return "Unhealthy for Sensitive Groups", "#ff7e00"
+        return "Unhealthy for Sensitive Groups", "#f97316"
     elif aqi <= 200:
-        return "Unhealthy", "#ff0000"
+        return "Unhealthy", "#ef4444"
     elif aqi <= 300:
-        return "Very Unhealthy", "#8f3f97"
+        return "Very Unhealthy", "#a855f7"
     else:
         return "Hazardous", "#7e0023"
 
@@ -75,12 +75,38 @@ def make_predictions(df, models):
     return predictions, latest_row
 
 
+def dominant_pollutant(latest):
+    """Return the pollutant with the highest normalized reading, for display."""
+    pollutant_map = {
+        "pm25": "PM2.5", "pm10": "PM10", "o3": "O3",
+        "no2": "NO2", "so2": "SO2", "co": "CO",
+    }
+    # rough normalization thresholds so CO (measured in different units) doesn't always dominate
+    norm_ref = {"pm25": 35, "pm10": 150, "o3": 100, "no2": 100, "so2": 40, "co": 9}
+    scores = {k: latest[k] / norm_ref[k] for k in pollutant_map}
+    top = max(scores, key=scores.get)
+    return pollutant_map[top]
+
+
+def gauge_svg(value, max_value, accent, text_color, subtext_color, track_color):
+    """Big, clean AQI number display (no arc)."""
+    value = max(0, min(value, max_value))
+
+    html = f"""
+    <div style="text-align:center;padding:6px 0;">
+        <div style="font-size:3.0rem;font-weight:800;line-height:1;color:{text_color};font-family:'Inter',sans-serif;">{value:.0f}</div>
+        <div style="font-size:0.8rem;letter-spacing:1.5px;color:{subtext_color};font-family:'Inter',sans-serif;margin-top:6px;">AQI</div>
+    </div>
+    """
+    return html
+
+
 # ================= PAGE CONFIG =================
 st.set_page_config(page_title="Lahore AQI Forecast", page_icon="🌫️", layout="wide")
 
 # ================= THEME STATE =================
 if "theme" not in st.session_state:
-    st.session_state.theme = "dark"
+    st.session_state.theme = "light"
 
 def toggle_theme():
     st.session_state.theme = "light" if st.session_state.theme == "dark" else "dark"
@@ -88,36 +114,156 @@ def toggle_theme():
 is_dark = st.session_state.theme == "dark"
 
 if is_dark:
-    bg_color = "#0e1117"
-    text_color = "#f0f2f6"
-    subtext_color = "#a0a5b1"
+    bg_color = "#0b0e14"
+    card_bg = "#12161f"
+    border_color = "#232838"
+    text_color = "#f4f6fb"
+    subtext_color = "#8b93a7"
     accent = "#4fc3f7"
+    track_color = "#232838"
+    chip_bg = "#1a1f2b"
+    banner_bg = "#1c1f14"
+    banner_border = "#3a3a1a"
 else:
-    bg_color = "#f7f9fc"
-    text_color = "#1a1f2b"
-    subtext_color = "#5c6270"
-    accent = "#0277bd"
+    bg_color = "#f6f8fb"
+    card_bg = "#ffffff"
+    border_color = "#e7eaf0"
+    text_color = "#111827"
+    subtext_color = "#6b7280"
+    accent = "#0284c7"
+    track_color = "#eef1f6"
+    chip_bg = "#eef2ff"
+    banner_bg = "#fff8e6"
+    banner_border = "#f4e2ad"
 
 st.markdown(f"""
 <style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+html, body, [class*="css"] {{
+    font-family: 'Inter', sans-serif;
+}}
+
 .stApp {{ background-color: {bg_color}; }}
-[data-testid="stMetricValue"] {{ color: {text_color}; }}
+
+#MainMenu, footer, header {{ visibility: hidden; }}
+
+.block-container {{
+    padding-top: 2rem;
+    max-width: 1150px;
+}}
+
+h1, h2, h3, h4, p, span, label, div,
+[data-testid="stSidebar"] *,
+[data-testid="stMarkdownContainer"] * {{
+    color: {text_color};
+}}
+
+[data-testid="stCaptionContainer"] * {{
+    color: {subtext_color} !important;
+}}
+
+[data-testid="stMetricValue"] {{ color: {text_color}; font-weight: 700; }}
 [data-testid="stMetricLabel"] {{ color: {subtext_color}; }}
+[data-testid="stMetricDelta"] svg {{ display: none; }}
+
+/* card containers */
+div[data-testid="stVerticalBlockBorderWrapper"] {{
+    background: {card_bg};
+    border: 1px solid {border_color};
+    border-radius: 18px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+}}
+
+/* pill badge at the very top */
+.eyebrow-chip {{
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: {chip_bg};
+    color: {accent};
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 1.2px;
+    padding: 6px 14px;
+    border-radius: 999px;
+    margin-bottom: 14px;
+    text-transform: uppercase;
+}}
+
+.page-title {{
+    font-size: 2.3rem;
+    font-weight: 800;
+    margin: 0 0 4px 0;
+    letter-spacing: -0.5px;
+}}
+
+.page-subtitle {{
+    color: {subtext_color};
+    font-size: 0.95rem;
+    margin-bottom: 1.6rem;
+    max-width: 640px;
+}}
+
 .category-badge {{
     display: inline-block;
     padding: 5px 16px;
-    border-radius: 20px;
+    border-radius: 999px;
     font-weight: 600;
-    color: black;
+    color: white;
+    font-size: 0.82rem;
+}}
+
+.refresh-box {{
+    background: {card_bg};
+    border: 1px solid {border_color};
+    border-radius: 14px;
+    padding: 10px 16px;
+    text-align: right;
+    font-size: 0.8rem;
+}}
+.refresh-box .label {{
+    color: {subtext_color};
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    font-size: 0.68rem;
+}}
+.refresh-box .value {{
+    font-weight: 700;
+    font-size: 0.95rem;
+}}
+
+.alert-banner {{
+    background: {banner_bg};
+    border: 1px solid {banner_border};
+    border-radius: 14px;
+    padding: 14px 18px;
+    margin: 6px 0 22px 0;
     font-size: 0.9rem;
 }}
-h1, h2, h3, h4, p, span, label,
-[data-testid="stSidebar"] * ,
-[data-testid="stMarkdownContainer"] * {{
-    color: {text_color} !important;
+
+.legend-row {{
+    display:flex; align-items:center; margin-bottom:6px;
 }}
-[data-testid="stCaptionContainer"] * {{
-    color: {subtext_color} !important;
+.legend-dot {{
+    display:inline-block; width:10px; height:10px; border-radius:50%;
+    margin-right:8px; flex-shrink:0;
+}}
+.legend-text {{ font-size:0.83rem; color:{subtext_color}; }}
+
+/* sidebar */
+[data-testid="stSidebar"] {{
+    background-color: {card_bg} !important;
+    border-right: 1px solid {border_color};
+}}
+[data-testid="stSidebar"] > div {{
+    background-color: {card_bg} !important;
+}}
+[data-testid="stSidebarUserContent"] {{
+    background-color: {card_bg} !important;
+}}
+[data-testid="stSidebar"] hr {{
+    border-color: {border_color};
 }}
 </style>
 """, unsafe_allow_html=True)
@@ -144,19 +290,18 @@ with st.sidebar:
     st.markdown("---")
     st.markdown("**🎨 EPA AQI Scale**")
     scale = [
-        ("0–50", "Good", "#00e400"),
-        ("51–100", "Moderate", "#dbc400"),
-        ("101–150", "Unhealthy (Sensitive)", "#ff7e00"),
-        ("151–200", "Unhealthy", "#ff0000"),
-        ("201–300", "Very Unhealthy", "#8f3f97"),
+        ("0–50", "Good", "#22c55e"),
+        ("51–100", "Moderate", "#eab308"),
+        ("101–150", "Unhealthy (Sensitive)", "#f97316"),
+        ("151–200", "Unhealthy", "#ef4444"),
+        ("201–300", "Very Unhealthy", "#a855f7"),
         ("301–500", "Hazardous", "#7e0023"),
     ]
     for rng, label, color in scale:
         st.markdown(
-            f'<div style="display:flex;align-items:center;margin-bottom:4px;">'
-            f'<span style="display:inline-block;width:12px;height:12px;'
-            f'background:{color};border-radius:50%;margin-right:8px;flex-shrink:0;"></span>'
-            f'<span style="font-size:0.85rem;">{rng} — {label}</span></div>',
+            f'<div class="legend-row">'
+            f'<span class="legend-dot" style="background:{color};"></span>'
+            f'<span class="legend-text">{rng} — {label}</span></div>',
             unsafe_allow_html=True,
         )
     st.markdown("---")
@@ -170,24 +315,51 @@ predictions, latest_row = make_predictions(df, models)
 current_aqi = df["aqi"].iloc[-1]
 current_time = df["timestamp"].iloc[-1]
 cat, color = aqi_category(current_aqi)
+latest = latest_row.iloc[0]
+dom_pollutant = dominant_pollutant(latest)
 
 # ================= HEADER =================
-st.title(f"🌫️ {CITY} Air Quality Forecast")
-st.caption(f"Last updated: {current_time.strftime('%d %B %Y, %I:%M %p')}")
+head_col1, head_col2 = st.columns([3, 1])
+with head_col1:
+    st.markdown('<div class="eyebrow-chip">🌫️ Live AQI Intelligence</div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="page-title">{CITY} Air Quality Forecast</div>', unsafe_allow_html=True)
+    st.markdown(
+        '<div class="page-subtitle">3-day AQI forecast blending gradient boosting with a persistence '
+        'baseline, retrained daily · data refreshed hourly</div>',
+        unsafe_allow_html=True,
+    )
+with head_col2:
+    st.markdown(
+        f'''<div class="refresh-box">
+                <div class="label">Last refresh</div>
+                <div class="value">{current_time.strftime('%d %b %Y')}</div>
+                <div class="label">{current_time.strftime('%I:%M %p')}</div>
+            </div>''',
+        unsafe_allow_html=True,
+    )
 
 # ================= CURRENT AQI =================
 col1, col2 = st.columns([1, 2])
 with col1:
     with st.container(border=True):
-        st.metric("Current AQI", f"{current_aqi:.0f}")
-        st.markdown(
-            f'<span class="category-badge" style="background:{color};">{cat}</span>',
-            unsafe_allow_html=True,
-        )
+        gcol1, gcol2 = st.columns([1, 1])
+        with gcol1:
+            st.markdown(
+                gauge_svg(current_aqi, 300, color, text_color, subtext_color, track_color),
+                unsafe_allow_html=True,
+            )
+        with gcol2:
+            st.markdown(
+                f'<div style="padding-top:14px;">'
+                f'<span class="category-badge" style="background:{color};">{cat}</span>'
+                f'<div style="margin-top:10px;font-size:0.8rem;color:{subtext_color};">'
+                f'Dominant pollutant<br><b style="color:{text_color};font-size:0.95rem;">{dom_pollutant}</b></div>'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
 with col2:
     with st.container(border=True):
         st.markdown("#### Dominant readings right now")
-        latest = latest_row.iloc[0]
         m1, m2, m3, m4 = st.columns(4)
         m1.metric("🌡️ Temp", f"{latest['temperature']:.0f}°C")
         m2.metric("💧 Humidity", f"{latest['humidity']:.0f}%")
@@ -196,12 +368,15 @@ with col2:
 
 # ================= ALERT =================
 max_forecast = max(predictions.values())
+alert_icon = "🔴" if max_forecast > 150 else ("🟠" if max_forecast > 100 else "🟢")
 if max_forecast > 150:
-    st.error(f"⚠️ **Hazardous conditions expected within 72 hours** — peak forecast AQI: {max_forecast:.0f}. Limit outdoor activity.")
+    msg = f"Hazardous conditions expected within 72 hours — peak forecast AQI: <b>{max_forecast:.0f}</b>. Limit outdoor activity."
 elif max_forecast > 100:
-    st.warning(f"⚠️ Unhealthy-for-sensitive-groups levels expected — peak forecast AQI: {max_forecast:.0f}.")
+    msg = f"Unhealthy-for-sensitive-groups levels expected — peak forecast AQI: <b>{max_forecast:.0f}</b>. Sensitive groups (children, elderly, respiratory/heart conditions) should limit prolonged outdoor exertion."
 else:
-    st.success(f"✅ Air quality expected to stay in a manageable range over the next 72 hours (peak: {max_forecast:.0f}).")
+    msg = f"Air quality expected to stay in a manageable range over the next 72 hours (peak: <b>{max_forecast:.0f}</b>)."
+
+st.markdown(f'<div class="alert-banner">{alert_icon} {msg}</div>', unsafe_allow_html=True)
 
 # ================= FORECAST CARDS =================
 st.subheader("📅 3-Day Forecast")
@@ -220,18 +395,19 @@ for i, horizon in enumerate([24, 48, 72]):
 
 # ================= CHART =================
 st.subheader("📈 AQI Trend: History & Forecast")
-recent = df.tail(24 * 7)[["timestamp", "aqi"]].copy()
-recent["type"] = "Historical"
+with st.container(border=True):
+    recent = df.tail(24 * 7)[["timestamp", "aqi"]].copy()
+    recent["type"] = "Historical"
 
-forecast_rows = [
-    {"timestamp": current_time + timedelta(hours=h), "aqi": predictions[h], "type": "Forecast"}
-    for h in [24, 48, 72]
-]
-forecast_df = pd.DataFrame(forecast_rows)
+    forecast_rows = [
+        {"timestamp": current_time + timedelta(hours=h), "aqi": predictions[h], "type": "Forecast"}
+        for h in [24, 48, 72]
+    ]
+    forecast_df = pd.DataFrame(forecast_rows)
 
-chart_df = pd.concat([recent, forecast_df], ignore_index=True)
-chart_pivot = chart_df.pivot_table(index="timestamp", columns="type", values="aqi")
-st.line_chart(chart_pivot)
+    chart_df = pd.concat([recent, forecast_df], ignore_index=True)
+    chart_pivot = chart_df.pivot_table(index="timestamp", columns="type", values="aqi")
+    st.line_chart(chart_pivot, color=[accent, "#f97316"])
 
 # ================= RAW DATA =================
 with st.expander("🔍 View recent raw data"):
@@ -245,6 +421,8 @@ st.caption("Which features drive each forecast the most")
 horizon_choice = st.selectbox("Select forecast horizon:", [24, 48, 72], format_func=lambda h: f"{h} hours ahead")
 img_col1, img_col2 = st.columns(2)
 with img_col1:
-    st.image(f"models/shap_importance_{horizon_choice}h.png", caption="Feature importance (average impact)")
+    with st.container(border=True):
+        st.image(f"models/shap_importance_{horizon_choice}h.png", caption="Feature importance (average impact)")
 with img_col2:
-    st.image(f"models/shap_summary_{horizon_choice}h.png", caption="Feature impact distribution")
+    with st.container(border=True):
+        st.image(f"models/shap_summary_{horizon_choice}h.png", caption="Feature impact distribution")
